@@ -36,11 +36,19 @@
     "occupancy_percentage": 3.6
   },
   {
-    "archetype": "R",
+    "archetype": "R団",
     "occupancy_percentage": 2.7
   },
   {
-    "archetype": "ニンジャスピナー",
+    "archetype": "ゾロアーク",
+    "occupancy_percentage": 2.2
+  },
+  {
+    "archetype": "リザードン",
+    "occupancy_percentage": 2.2
+  },
+  {
+    "archetype": "ガブリアス",
     "occupancy_percentage": 2.2
   },
   {
