@@ -65,7 +65,7 @@ jobs:
           done
 
           # プロンプトを追加
-          PARTS=$(echo "$PARTS" | jq '. + [{"text": "これらの画像はポケモンカードゲームのティアリスト（環境デッキランキング）です。画像に含まれる全てのデッキ情報をOCRで読み取り、以下のJSON形式で出力してください。画像に書かれている情報のみを正確に読み取ってください。\n\n```json\n{\n  \"tiers\": [\n    {\n      \"tier\": \"S\",\n      \"decks\": [\n        {\n          \"name\": \"デッキ名\",\n          \"share_rate\": \"シェア率(あれば)\"\n        }\n      ]\n    }\n  ]\n}\n```\n\nJSON以外のテキストは出力しないでください。"}]')
+          PARTS=$(echo "$PARTS" | jq '. + [{"text": "これらの画像はポケモンカードゲームのティアリスト（環境デッキランキング）です。画像に含まれる全てのデッキ情報をOCRで読み取り、以下のJSON形式で出力してください。画像に書かれている情報のみを正確に読み取ってください。\n\n```[{ "archetype": "ドラパルト", "occupancy_percentage":  37.3], ...}```\n\nJSON以外のテキストは出力しないでください。"}]')
 
           REQUEST_BODY=$(jq -n --argjson parts "$PARTS" '{
             "contents": [{"role": "user", "parts": $parts}],
@@ -77,21 +77,22 @@ jobs:
             -H "Content-Type: application/json" \
             -d "$REQUEST_BODY")
 
-          # レスポンスからJSONを抽出
-          echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text' > "issue-${ISSUE_NUMBER}.json"
-
-          # 整形
-          cat "issue-${ISSUE_NUMBER}.json" | jq '.' > /tmp/formatted.json && mv /tmp/formatted.json "issue-${ISSUE_NUMBER}.json"
+          # レスポンスからJSONを抽出・整形
+          echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text' | jq '.' > /tmp/ocr_result.json
 
           echo "=== OCR Result ==="
-          cat "issue-${ISSUE_NUMBER}.json"
+          cat /tmp/ocr_result.json
+
+          # latest.json と archive/yyyy-mm-dd.json に保存
+          DATE=$(date -u +%Y-%m-%d)
+          mkdir -p archive
+          cp /tmp/ocr_result.json latest.json
+          cp /tmp/ocr_result.json "archive/${DATE}.json"
 
       - name: Commit and push
-        env:
-          ISSUE_NUMBER: ${{ steps.images.outputs.issue_number }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "issue-${ISSUE_NUMBER}.json"
-          git commit -m "Add OCR result for issue #${ISSUE_NUMBER}"
+          git add latest.json archive/
+          git commit -m "Update tier data ($(date -u +%Y-%m-%d))"
           git push
