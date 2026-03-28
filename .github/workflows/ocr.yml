@@ -3,6 +3,8 @@ name: OCR Issue Images via Vertex AI
 on:
   issues:
     types: [opened]
+  issue_comment:
+    types: [created]
 
 permissions:
   id-token: write
@@ -12,6 +14,9 @@ permissions:
 jobs:
   ocr:
     runs-on: ubuntu-latest
+    if: >-
+      (github.event_name == 'issues') ||
+      (github.event_name == 'issue_comment' && github.event.comment.body == '/retry')
     steps:
       - uses: actions/checkout@v4
 
@@ -27,8 +32,8 @@ jobs:
           ISSUE_BODY: ${{ github.event.issue.body }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
-          # GitHub issue内のMarkdown画像 ![alt](url) とHTMLのimg srcの両方を抽出
-          echo "$ISSUE_BODY" | grep -oP '(?<=!\[.*?\]\()https?://[^\)]+|(?<=<img[^>]*src=")[^"]+' > /tmp/image_urls.txt || true
+          # GitHub issue内のMarkdown画像 ![alt](url) とHTMLのimg src の両方を抽出
+          echo "$ISSUE_BODY" | grep -oP 'https://github\.com/user-attachments/assets/[a-f0-9-]+' > /tmp/image_urls.txt || true
           if [ ! -s /tmp/image_urls.txt ]; then
             echo "No images found in issue body"
             exit 1
