@@ -7,12 +7,19 @@ on:
 permissions:
   id-token: write
   contents: write
+  issues: write
 
 jobs:
   ocr:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Comment processing start
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment ${{ github.event.issue.number }} --body "OCR処理を開始します..."
 
       - name: Extract image URLs from issue body
         id: images
@@ -96,3 +103,10 @@ jobs:
           git add latest.json archive/
           git commit -m "Update tier data ($(date -u +%Y-%m-%d))"
           git push
+
+      - name: Close issue with comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment ${{ github.event.issue.number }} --body "OCR処理が完了しました。データを更新しました。"
+          gh issue close ${{ github.event.issue.number }}
