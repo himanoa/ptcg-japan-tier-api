@@ -1,1 +1,50 @@
-null
+[
+  {
+    "archetype": "ドラパルト",
+    "occupancy_percentage": 31.3
+  },
+  {
+    "archetype": "ルカリオ",
+    "occupancy_percentage": 8.9
+  },
+  {
+    "archetype": "タケルライコ",
+    "occupancy_percentage": 8.5
+  },
+  {
+    "archetype": "ゲッコウガ",
+    "occupancy_percentage": 5.4
+  },
+  {
+    "archetype": "オリーヴァ",
+    "occupancy_percentage": 5.4
+  },
+  {
+    "archetype": "フーディン",
+    "occupancy_percentage": 4.5
+  },
+  {
+    "archetype": "ピッピ",
+    "occupancy_percentage": 3.6
+  },
+  {
+    "archetype": "イワパレス",
+    "occupancy_percentage": 3.6
+  },
+  {
+    "archetype": "オーガポン",
+    "occupancy_percentage": 3.6
+  },
+  {
+    "archetype": "R",
+    "occupancy_percentage": 2.7
+  },
+  {
+    "archetype": "ニンジャスピナー",
+    "occupancy_percentage": 2.2
+  },
+  {
+    "archetype": "その他",
+    "occupancy_percentage": 16.1
+  }
+]
