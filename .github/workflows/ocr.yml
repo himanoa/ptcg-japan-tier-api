@@ -1,0 +1,97 @@
+name: OCR Issue Images via Vertex AI
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  ocr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract image URLs from issue body
+        id: images
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          # GitHub issue内のMarkdown画像 ![alt](url) とHTMLのimg srcの両方を抽出
+          echo "$ISSUE_BODY" | grep -oP '(?<=!\[.*?\]\()https?://[^\)]+|(?<=<img[^>]*src=")[^"]+' > /tmp/image_urls.txt || true
+          if [ ! -s /tmp/image_urls.txt ]; then
+            echo "No images found in issue body"
+            exit 1
+          fi
+          echo "issue_number=$ISSUE_NUMBER" >> "$GITHUB_OUTPUT"
+          cat /tmp/image_urls.txt
+
+      - name: Download images
+        run: |
+          mkdir -p /tmp/images
+          i=0
+          while IFS= read -r url; do
+            curl -sL "$url" -o "/tmp/images/image_${i}.png"
+            i=$((i + 1))
+          done < /tmp/image_urls.txt
+          echo "Downloaded $i image(s)"
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: OCR images via Vertex AI Gemini
+        env:
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          GCP_REGION: ${{ vars.GCP_REGION }}
+          ISSUE_NUMBER: ${{ steps.images.outputs.issue_number }}
+        run: |
+          ACCESS_TOKEN=$(gcloud auth print-access-token)
+          API_URL="https://${GCP_REGION}-aiplatform.googleapis.com/v1/projects/${GCP_PROJECT_ID}/locations/${GCP_REGION}/publishers/google/models/gemini-2.0-flash:generateContent"
+
+          PARTS='[]'
+          # 画像をbase64エンコードしてリクエストに追加
+          for img in /tmp/images/image_*.png; do
+            BASE64=$(base64 -w 0 "$img")
+            MIME_TYPE=$(file --mime-type -b "$img")
+            PARTS=$(echo "$PARTS" | jq --arg b64 "$BASE64" --arg mime "$MIME_TYPE" \
+              '. + [{"inlineData": {"mimeType": $mime, "data": $b64}}]')
+          done
+
+          # プロンプトを追加
+          PARTS=$(echo "$PARTS" | jq '. + [{"text": "これらの画像はポケモンカードゲームのティアリスト（環境デッキランキング）です。画像に含まれる全てのデッキ情報をOCRで読み取り、以下のJSON形式で出力してください。画像に書かれている情報のみを正確に読み取ってください。\n\n```json\n{\n  \"tiers\": [\n    {\n      \"tier\": \"S\",\n      \"decks\": [\n        {\n          \"name\": \"デッキ名\",\n          \"share_rate\": \"シェア率(あれば)\"\n        }\n      ]\n    }\n  ]\n}\n```\n\nJSON以外のテキストは出力しないでください。"}]')
+
+          REQUEST_BODY=$(jq -n --argjson parts "$PARTS" '{
+            "contents": [{"role": "user", "parts": $parts}],
+            "generationConfig": {"temperature": 0.0, "responseMimeType": "application/json"}
+          }')
+
+          RESPONSE=$(curl -s -X POST "$API_URL" \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$REQUEST_BODY")
+
+          # レスポンスからJSONを抽出
+          echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text' > "issue-${ISSUE_NUMBER}.json"
+
+          # 整形
+          cat "issue-${ISSUE_NUMBER}.json" | jq '.' > /tmp/formatted.json && mv /tmp/formatted.json "issue-${ISSUE_NUMBER}.json"
+
+          echo "=== OCR Result ==="
+          cat "issue-${ISSUE_NUMBER}.json"
+
+      - name: Commit and push
+        env:
+          ISSUE_NUMBER: ${{ steps.images.outputs.issue_number }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "issue-${ISSUE_NUMBER}.json"
+          git commit -m "Add OCR result for issue #${ISSUE_NUMBER}"
+          git push
