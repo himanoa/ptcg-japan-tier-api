@@ -67,27 +67,30 @@ jobs:
           ACCESS_TOKEN=$(gcloud auth print-access-token)
           API_URL="https://${GCP_REGION}-aiplatform.googleapis.com/v1/projects/${GCP_PROJECT_ID}/locations/${GCP_REGION}/publishers/google/models/gemini-2.0-flash:generateContent"
 
-          PARTS='[]'
-          # 画像をbase64エンコードしてリクエストに追加
+          # 画像をbase64エンコードしてJSONパーツをファイルに組み立て
+          echo '[]' > /tmp/parts.json
           for img in /tmp/images/image_*.png; do
-            BASE64=$(base64 -w 0 "$img")
             MIME_TYPE=$(file --mime-type -b "$img")
-            PARTS=$(echo "$PARTS" | jq --arg b64 "$BASE64" --arg mime "$MIME_TYPE" \
-              '. + [{"inlineData": {"mimeType": $mime, "data": $b64}}]')
+            base64 -w 0 "$img" > /tmp/b64.txt
+            jq -n --arg mime "$MIME_TYPE" --rawfile b64 /tmp/b64.txt \
+              '{"inlineData": {"mimeType": $mime, "data": ($b64 | rtrimstr("\n"))}}' > /tmp/part.json
+            jq --slurpfile part /tmp/part.json '. + $part' /tmp/parts.json > /tmp/parts_new.json
+            mv /tmp/parts_new.json /tmp/parts.json
           done
 
           # プロンプトを追加
-          PARTS=$(echo "$PARTS" | jq '. + [{"text": "これらの画像はポケモンカードゲームのティアリスト（環境デッキランキング）です。画像に含まれる全てのデッキ情報をOCRで読み取り、以下のJSON形式で出力してください。画像に書かれている情報のみを正確に読み取ってください。\n\n```[{ "archetype": "ドラパルト", "occupancy_percentage":  37.3], ...}```\n\nJSON以外のテキストは出力しないでください。"}]')
+          jq '. + [{"text": "これらの画像はポケモンカードゲームのティアリスト（環境デッキランキング）です。画像に含まれる全てのデッキ情報をOCRで読み取り、以下のJSON形式で出力してください。画像に書かれている情報のみを正確に読み取ってください。\n\n```[{ \"archetype\": \"ドラパルト\", \"occupancy_percentage\":  37.3], ...}```\n\nJSON以外のテキストは出力しないでください。"}]' /tmp/parts.json > /tmp/parts_final.json
 
-          REQUEST_BODY=$(jq -n --argjson parts "$PARTS" '{
-            "contents": [{"role": "user", "parts": $parts}],
+          # リクエストボディを組み立て
+          jq -n --slurpfile parts /tmp/parts_final.json '{
+            "contents": [{"role": "user", "parts": $parts[0]}],
             "generationConfig": {"temperature": 0.0, "responseMimeType": "application/json"}
-          }')
+          }' > /tmp/request.json
 
           RESPONSE=$(curl -s -X POST "$API_URL" \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             -H "Content-Type: application/json" \
-            -d "$REQUEST_BODY")
+            -d @/tmp/request.json)
 
           # レスポンスからJSONを抽出・整形
           echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text' | jq '.' > /tmp/ocr_result.json
