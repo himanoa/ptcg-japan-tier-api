@@ -92,8 +92,18 @@ jobs:
             -H "Content-Type: application/json" \
             -d @/tmp/request.json)
 
+          # デバッグ: レスポンス構造を確認
+          echo "=== Raw Response ==="
+          echo "$RESPONSE" | jq '.' || echo "$RESPONSE"
+
           # レスポンスからJSONを抽出・整形
-          echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text' | jq '.' > /tmp/ocr_result.json
+          OCR_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text')
+          if [ "$OCR_TEXT" = "null" ] || [ -z "$OCR_TEXT" ]; then
+            echo "ERROR: Failed to extract OCR text from response"
+            echo "$RESPONSE" | jq '.candidates[0]'
+            exit 1
+          fi
+          echo "$OCR_TEXT" | jq '.' > /tmp/ocr_result.json
 
           echo "=== OCR Result ==="
           cat /tmp/ocr_result.json
