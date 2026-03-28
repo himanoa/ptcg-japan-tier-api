@@ -65,7 +65,7 @@ jobs:
           ISSUE_NUMBER: ${{ steps.images.outputs.issue_number }}
         run: |
           ACCESS_TOKEN=$(gcloud auth print-access-token)
-          API_URL="https://${GCP_REGION}-aiplatform.googleapis.com/v1/projects/${GCP_PROJECT_ID}/locations/${GCP_REGION}/publishers/google/models/gemini-2.0-flash:generateContent"
+          API_URL="https://${GCP_REGION}-aiplatform.googleapis.com/v1/projects/${GCP_PROJECT_ID}/locations/${GCP_REGION}/publishers/google/models/gemini-2.5-flash-lite:generateContent"
 
           # 画像をbase64エンコードしてJSONパーツをファイルに組み立て
           echo '[]' > /tmp/parts.json
